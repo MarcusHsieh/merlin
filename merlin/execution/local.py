@@ -1,61 +1,289 @@
 
 
 """
-
+LocalExecutor with sample expansion support.
 """
 
+import json
+import os
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Callable, Dict, List
 
 from merlin.dag.models import ExecutionPlan, TaskChain
 from merlin.execution.base import TaskExecutor
 from merlin.execution.models import ExecutionContext, TaskResult, TaskStatus
+from merlin.execution.sample_expander import SampleExpander
+
+
+def write_status(status_file: str, status: str, return_code=None, elapsed_time=None):
+    """Write status information to a JSON file."""
+    status_data = {
+        'status': status,
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+    }
+    if return_code is not None:
+        status_data['return_code'] = return_code
+    if elapsed_time is not None:
+        status_data['elapsed_time'] = elapsed_time
+
+    with open(status_file, 'w') as f:
+        json.dump(status_data, f, indent=2)
 
 
 class LocalExecutor(TaskExecutor):
-    """Local executor that runs tasks in the current process."""
-    
-    def __init__(self, task_runner: Callable = None):
-        self.task_runner = task_runner or self._default_task_runner
-    
-    def execute_plan(self, plan: ExecutionPlan, context: ExecutionContext) -> Dict[str, TaskResult]:
-        """Execute plan locally."""
+    """Local process pool executor with sample expansion support."""
+
+    def __init__(self, max_workers: int = 4):
+        """
+        Initialize LocalExecutor.
+
+        Args:
+            max_workers: Maximum number of parallel worker processes (default: 4)
+        """
+        self.sample_expander = SampleExpander()
+        self.max_workers = max_workers
+
+    def execute_plan(self, plan: ExecutionPlan, context: ExecutionContext, wait: bool = True, timeout: int = 7200) -> Dict[str, TaskResult]:
+        """
+        Execute plan level-by-level using local process pool.
+
+        Args:
+            plan: Execution plan to execute
+            context: Execution context
+            wait: Ignored for LocalExecutor (always blocks). Included for API compatibility.
+            timeout: Ignored for LocalExecutor. Included for API compatibility.
+
+        Returns:
+            Dictionary mapping task names to TaskResults
+        """
         all_results = {}
-        
-        for level in plan.levels:
-            print(f"Executing depth {level.depth} locally...")
-            
-            # Execute chains in parallel using ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=len(level.parallel_chains)) as executor:
-                futures = []
-                for chain in level.parallel_chains:
-                    future = executor.submit(self.execute_chain, chain, context)
-                    futures.append(future)
-                
-                # Collect results
-                for future in futures:
-                    chain_results = future.result()
-                    for result in chain_results:
-                        all_results[result.task_name] = result
-        
+
+        # Create process pool
+        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+            for level in plan.levels:
+                print(f"Executing depth {level.depth} with {len(level.parallel_chains)} parallel chains...")
+
+                # Execute level and wait for completion
+                level_results = self._execute_level_parallel(level, context, executor)
+                all_results.update(level_results)
+
+                # Check for failures
+                failed = [k for k, v in level_results.items()
+                         if v.status == TaskStatus.FAILED]
+                if failed:
+                    print(f"Level {level.depth} had failures: {failed}")
+                    print("Stopping execution due to failures")
+                    break
+
         return all_results
-    
+
+    def _execute_level_parallel(
+        self,
+        level,
+        context: ExecutionContext,
+        executor: ProcessPoolExecutor
+    ) -> Dict[str, TaskResult]:
+        """
+        Execute all chains in a level using process pool.
+
+        Args:
+            level: ExecutionLevel to execute
+            context: Execution context
+            executor: ProcessPoolExecutor to use
+
+        Returns:
+            Dictionary mapping task names to TaskResults
+        """
+        level_results = {}
+        futures = {}
+
+        for chain in level.parallel_chains:
+            # Skip virtual nodes
+            has_real_tasks = self._has_real_tasks(chain, context)
+            if not has_real_tasks:
+                for task in chain.tasks:
+                    level_results[task] = TaskResult(
+                        task_name=task,
+                        status=TaskStatus.SKIPPED,
+                        error="Virtual node"
+                    )
+                continue
+
+            # Expand chain with samples
+            expanded_positions = self.sample_expander.expand_chain(chain, context)
+
+            # Log expansion details
+            total_expanded = sum(len(pos) for pos in expanded_positions)
+            print(f"  Chain '{chain.tasks[0] if chain.tasks else 'unknown'}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions")
+
+            # Execute chain with dependencies (sequential positions, parallel samples)
+            position_results = self._execute_chain_with_dependencies(
+                expanded_positions, context, executor
+            )
+            level_results.update(position_results)
+
+        return level_results
+
+    def _execute_chain_with_dependencies(
+        self,
+        expanded_positions: List[List[Dict]],
+        context: ExecutionContext,
+        executor: ProcessPoolExecutor
+    ) -> Dict[str, TaskResult]:
+        """
+        Execute a chain with multiple positions sequentially.
+
+        Each position must complete before the next position starts.
+        Within each position, tasks execute in parallel.
+
+        Args:
+            expanded_positions: 2D structure [[pos0_tasks], [pos1_tasks], ...]
+            context: Execution context
+            executor: ProcessPoolExecutor to use
+
+        Returns:
+            Dictionary mapping task names to TaskResults
+        """
+        all_results = {}
+        adapter_config = context.study.get_adapter_config(override_type="local")
+        # Add task_server field so Step._update_status_file knows we're running locally
+        adapter_config["task_server"] = "local"
+
+        # Execute each position sequentially
+        for position_idx, position_tasks in enumerate(expanded_positions):
+            print(f"    Executing position {position_idx} with {len(position_tasks)} tasks...")
+
+            # Submit all tasks at this position (parallel)
+            position_futures = {}
+            for task_info in position_tasks:
+                future = executor.submit(
+                    self._execute_step_wrapper,
+                    task_info['step'],
+                    adapter_config
+                )
+                position_futures[future] = task_info
+
+            # Wait for this position to complete before moving to next
+            for future in as_completed(position_futures):
+                task_info = position_futures[future]
+                task_name = task_info['step'].name()
+
+                try:
+                    return_code = future.result(timeout=3600)  # 1 hour timeout per task
+
+                    if return_code == 0:
+                        all_results[task_name] = TaskResult(
+                            task_name=task_name,
+                            status=TaskStatus.COMPLETED,
+                            result=return_code
+                        )
+                    else:
+                        all_results[task_name] = TaskResult(
+                            task_name=task_name,
+                            status=TaskStatus.FAILED,
+                            error=f"Task returned non-zero exit code: {return_code}"
+                        )
+                except Exception as e:
+                    all_results[task_name] = TaskResult(
+                        task_name=task_name,
+                        status=TaskStatus.FAILED,
+                        error=str(e)
+                    )
+
+        return all_results
+
+    @staticmethod
+    def _execute_step_wrapper(step, adapter_config):
+        """
+        Wrapper for executing a step in a subprocess.
+
+        This is a static method because it needs to be pickleable
+        for process pool execution.
+
+        Args:
+            step: Step object to execute
+            adapter_config: Adapter configuration
+
+        Returns:
+            Return code (0 for success, non-zero for failure)
+        """
+        import time
+        import os
+        import traceback
+
+        workspace = None
+        status_file = None
+
+        try:
+            # Get workspace
+            workspace = step.get_workspace()
+            step_name = step.name()
+
+            # Check if already completed
+            finished_file = f"{workspace}/MERLIN_FINISHED"
+            if os.path.exists(finished_file):
+                import logging
+                LOG = logging.getLogger(__name__)
+                LOG.info(f"Skipping step '{step_name}' in '{workspace}' (already finished).")
+                return 0
+
+            # Execute step (handles script generation and execution internally)
+            return_code = step.execute(adapter_config)
+
+            # Touch MERLIN_FINISHED if successful
+            if return_code == 0:
+                open(finished_file, "w").close()
+
+            return return_code
+
+        except Exception as e:
+            # Log exception
+            import logging
+            LOG = logging.getLogger(__name__)
+            LOG.error(f"Error executing step {step.name()}: {e}")
+            LOG.debug(traceback.format_exc())
+
+            # Re-raise to let the caller handle it
+            raise
+
+    def _has_real_tasks(self, chain: TaskChain, context: ExecutionContext) -> bool:
+        """
+        Check if a chain has real tasks (not just virtual nodes).
+
+        Args:
+            chain: TaskChain to check
+            context: Execution context
+
+        Returns:
+            True if chain has real tasks, False if only virtual nodes
+        """
+        for task in chain.tasks:
+            try:
+                step = context.study.dag.step(task)
+                if step is not None:
+                    return True
+            except (AttributeError, KeyError, TypeError):
+                pass
+        return False
+
     def execute_chain(self, chain: TaskChain, context: ExecutionContext) -> List[TaskResult]:
-        """Execute chain locally."""
+        """Execute chain locally (legacy method for compatibility)."""
         results = []
         for task_name in chain.tasks:
             result = self.execute_task(task_name, context)
             results.append(result)
         return results
-    
+
     def execute_task(self, task_name: str, context: ExecutionContext) -> TaskResult:
-        """Execute task locally."""
+        """Execute task locally (legacy method for compatibility)."""
         try:
             start_time = time.time()
-            result = self.task_runner(task_name, context)
+            step_to_execute = context.study.dag.step(task_name)
+            adapter_config = context.study.get_adapter_config(override_type="local")
+            result = step_to_execute.execute(adapter_config)
             end_time = time.time()
-            
+
             return TaskResult(
                 task_name=task_name,
                 status=TaskStatus.COMPLETED,
@@ -69,12 +297,3 @@ class LocalExecutor(TaskExecutor):
                 status=TaskStatus.FAILED,
                 error=str(e)
             )
-    
-    def _default_task_runner(self, task_name: str, context: ExecutionContext):
-        """Default task runner - just simulates work."""
-        print(f"  Running {task_name} locally...")
-        step_to_execute = context.study.dag.step(task_name)
-        # TODO when we create Batch class, use that instead of adapter_config
-        adapter_config = context.study.get_adapter_config(override_type="local")
-        result = step_to_execute.execute(adapter_config)
-        return result

@@ -245,7 +245,7 @@ class MerlinStepRecord(_StepRecord):
     def _update_status_file(
         self,
         result: str = None,
-        task_server: str = "celery",
+        task_server: str = None,
     ):
         """
         Constructs a dictionary containing status information and creates a signature
@@ -260,7 +260,13 @@ class MerlinStepRecord(_StepRecord):
             result: An optional string representation of a ReturnCode value, applied
                 when the step has finished running.
             task_server: An optional parameter to specify the task server being used.
+                Defaults to "local" if running in local mode, otherwise "celery".
         """
+        from merlin.config.configfile import is_local_mode  # pylint: disable=C0415
+
+        # Determine task_server if not provided
+        if task_server is None:
+            task_server = "local" if is_local_mode() else "celery"
 
         # This dict is used for converting an enum value to a string for readability
         state_translator: Dict[State, str] = {
