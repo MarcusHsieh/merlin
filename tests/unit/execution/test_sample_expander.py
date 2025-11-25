@@ -8,12 +8,11 @@
 Tests for the SampleExpander class.
 """
 
+from unittest.mock import Mock, patch
+
 import numpy as np
-import pytest
-from unittest.mock import MagicMock, Mock, patch
 
 from merlin.dag.models import TaskChain
-from merlin.execution.models import ExecutionContext
 from merlin.execution.sample_expander import SampleExpander
 
 
@@ -137,12 +136,12 @@ class TestExpandChainNoSamples:
         # Should return 2D structure with single position, single task
         assert len(result) == 1  # One position
         assert len(result[0]) == 1  # One task in position
-        assert result[0][0]['step'] == mock_step
-        assert result[0][0]['sample_id'] is None
-        assert result[0][0]['sample_values'] is None
-        assert result[0][0]['workspace'] == "/workspace/step1"
-        assert result[0][0]['chain_position'] == 0
-        assert result[0][0]['original_chain'] == chain
+        assert result[0][0]["step"] == mock_step
+        assert result[0][0]["sample_id"] is None
+        assert result[0][0]["sample_values"] is None
+        assert result[0][0]["workspace"] == "/workspace/step1"
+        assert result[0][0]["chain_position"] == 0
+        assert result[0][0]["original_chain"] == chain
 
     def test_expand_chain_empty_samples(self):
         """Test expand_chain with empty samples array"""
@@ -164,22 +163,18 @@ class TestExpandChainNoSamples:
 
         assert len(result) == 1
         assert len(result[0]) == 1
-        assert result[0][0]['sample_id'] is None
+        assert result[0][0]["sample_id"] is None
 
 
 class TestExpandChainWithSamples:
     """Tests for expand_chain() with samples"""
 
-    @patch('merlin.execution.sample_expander.uniform_directories')
-    @patch('merlin.execution.sample_expander.create_hierarchy')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_cmd')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_sample')
+    @patch("merlin.execution.sample_expander.uniform_directories")
+    @patch("merlin.execution.sample_expander.create_hierarchy")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_cmd")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_sample")
     def test_expand_chain_single_step_multiple_samples(
-        self,
-        mock_param_sub_sample,
-        mock_param_sub_cmd,
-        mock_create_hierarchy,
-        mock_uniform_dirs
+        self, mock_param_sub_sample, mock_param_sub_cmd, mock_create_hierarchy, mock_uniform_dirs
     ):
         """Test expand_chain creates one task per sample"""
         expander = SampleExpander()
@@ -199,10 +194,7 @@ class TestExpandChainWithSamples:
 
         # Mock parameter substitutions
         mock_param_sub_cmd.return_value = [("$(MERLIN_GLOB_PATH)", "*/")]
-        mock_param_sub_sample.side_effect = lambda s, l, i, p: [
-            ("$(X0)", str(s[0])),
-            ("$(X1)", str(s[1]))
-        ]
+        mock_param_sub_sample.side_effect = lambda s, labels, i, p: [("$(X0)", str(s[0])), ("$(X1)", str(s[1]))]
 
         # Mock step
         mock_step = Mock()
@@ -241,24 +233,20 @@ class TestExpandChainWithSamples:
         # Check each sample
         for i in range(3):
             task_info = result[0][i]
-            assert task_info['sample_id'] == i
-            assert task_info['sample_values'] == {"X0": samples[i][0], "X1": samples[i][1]}
-            assert task_info['workspace'] == f"/workspace/hello/{i:02d}"
-            assert task_info['chain_position'] == 0
-            assert task_info['original_chain'] == chain
+            assert task_info["sample_id"] == i
+            assert task_info["sample_values"] == {"X0": samples[i][0], "X1": samples[i][1]}
+            assert task_info["workspace"] == f"/workspace/hello/{i:02d}"
+            assert task_info["chain_position"] == 0
+            assert task_info["original_chain"] == chain
 
-    @patch('merlin.execution.sample_expander.uniform_directories')
-    @patch('merlin.execution.sample_expander.create_hierarchy')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_cmd')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_sample')
+    @patch("merlin.execution.sample_expander.uniform_directories")
+    @patch("merlin.execution.sample_expander.create_hierarchy")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_cmd")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_sample")
     def test_expand_chain_multi_position_chain(
-        self,
-        mock_param_sub_sample,
-        mock_param_sub_cmd,
-        mock_create_hierarchy,
-        mock_uniform_dirs
+        self, mock_param_sub_sample, mock_param_sub_cmd, mock_create_hierarchy, mock_uniform_dirs
     ):
-        """Test expand_chain with multi-step chain (collect → translate)"""
+        """Test expand_chain with multi-step chain (collect -> translate)"""
         expander = SampleExpander()
 
         # Mock samples (2 samples)
@@ -274,10 +262,7 @@ class TestExpandChainWithSamples:
         mock_create_hierarchy.return_value = mock_sample_index
 
         mock_param_sub_cmd.return_value = [("$(MERLIN_GLOB_PATH)", "*/")]
-        mock_param_sub_sample.side_effect = lambda s, l, i, p: [
-            ("$(X0)", str(s[0])),
-            ("$(X1)", str(s[1]))
-        ]
+        mock_param_sub_sample.side_effect = lambda s, labels, i, p: [("$(X0)", str(s[0])), ("$(X1)", str(s[1]))]
 
         # Mock two different steps
         mock_collect = Mock()
@@ -324,27 +309,22 @@ class TestExpandChainWithSamples:
         assert len(result[1]) == 1  # One task at position 1 (no sample expansion)
 
         # Check positions
-        assert result[0][0]['chain_position'] == 0
-        assert result[1][0]['chain_position'] == 1
+        assert result[0][0]["chain_position"] == 0
+        assert result[1][0]["chain_position"] == 1
 
 
 class TestGlobPathCalculation:
     """Tests for MERLIN_GLOB_PATH calculation"""
 
-    @patch('merlin.execution.sample_expander.uniform_directories')
-    @patch('merlin.execution.sample_expander.create_hierarchy')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_cmd')
-    def test_glob_path_calculation_10_samples(
-        self,
-        mock_param_sub_cmd,
-        mock_create_hierarchy,
-        mock_uniform_dirs
-    ):
+    @patch("merlin.execution.sample_expander.uniform_directories")
+    @patch("merlin.execution.sample_expander.create_hierarchy")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_cmd")
+    def test_glob_path_calculation_10_samples(self, mock_param_sub_cmd, mock_create_hierarchy, mock_uniform_dirs):
         """Test MERLIN_GLOB_PATH is calculated correctly for 10 samples"""
         expander = SampleExpander()
 
         # Mock 10 samples
-        samples = np.array([[i, i+1] for i in range(10)])
+        samples = np.array([[i, i + 1] for i in range(10)])
         labels = ["X0", "X1"]
 
         # With 10 samples and level_max_dirs=25, should create [1] directory level
@@ -358,6 +338,7 @@ class TestGlobPathCalculation:
 
         # Capture the glob_path passed to parameter_substitutions_for_cmd
         captured_glob_path = None
+
         def capture_glob_path(glob_path, sample_paths):
             nonlocal captured_glob_path
             captured_glob_path = glob_path
@@ -383,20 +364,15 @@ class TestGlobPathCalculation:
         # glob_path should be "*/*" (1 directory level + 1 execution dir level)
         assert captured_glob_path == "*/*"
 
-    @patch('merlin.execution.sample_expander.uniform_directories')
-    @patch('merlin.execution.sample_expander.create_hierarchy')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_cmd')
-    def test_glob_path_calculation_100_samples(
-        self,
-        mock_param_sub_cmd,
-        mock_create_hierarchy,
-        mock_uniform_dirs
-    ):
+    @patch("merlin.execution.sample_expander.uniform_directories")
+    @patch("merlin.execution.sample_expander.create_hierarchy")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_cmd")
+    def test_glob_path_calculation_100_samples(self, mock_param_sub_cmd, mock_create_hierarchy, mock_uniform_dirs):
         """Test MERLIN_GLOB_PATH is calculated correctly for 100 samples"""
         expander = SampleExpander()
 
         # Mock 100 samples
-        samples = np.array([[i, i+1] for i in range(100)])
+        samples = np.array([[i, i + 1] for i in range(100)])
         labels = ["X0", "X1"]
 
         # With 100 samples and level_max_dirs=25, should create [4, 25] directory levels
@@ -404,11 +380,14 @@ class TestGlobPathCalculation:
         mock_uniform_dirs.return_value = [4, 25]
 
         mock_sample_index = Mock()
-        mock_sample_index.make_directory_string.return_value = ":".join([f"{i:02d}/{j:02d}" for i in range(4) for j in range(25)])
+        mock_sample_index.make_directory_string.return_value = ":".join(
+            [f"{i:02d}/{j:02d}" for i in range(4) for j in range(25)]
+        )
         mock_sample_index.get_path_to_sample.side_effect = lambda i: f"{i//25:02d}/{i%25:02d}"
         mock_create_hierarchy.return_value = mock_sample_index
 
         captured_glob_path = None
+
         def capture_glob_path(glob_path, sample_paths):
             nonlocal captured_glob_path
             captured_glob_path = glob_path
@@ -437,22 +416,18 @@ class TestGlobPathCalculation:
 class TestWorkspaceIsolation:
     """Tests for sample workspace isolation"""
 
-    @patch('merlin.execution.sample_expander.uniform_directories')
-    @patch('merlin.execution.sample_expander.create_hierarchy')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_cmd')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_sample')
+    @patch("merlin.execution.sample_expander.uniform_directories")
+    @patch("merlin.execution.sample_expander.create_hierarchy")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_cmd")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_sample")
     def test_workspace_isolation_unique_paths(
-        self,
-        mock_param_sub_sample,
-        mock_param_sub_cmd,
-        mock_create_hierarchy,
-        mock_uniform_dirs
+        self, mock_param_sub_sample, mock_param_sub_cmd, mock_create_hierarchy, mock_uniform_dirs
     ):
         """Test each sample gets a unique workspace path"""
         expander = SampleExpander()
 
         # Mock 5 samples
-        samples = np.array([[i, i+1] for i in range(5)])
+        samples = np.array([[i, i + 1] for i in range(5)])
         labels = ["X0", "X1"]
 
         mock_uniform_dirs.return_value = [1]
@@ -463,7 +438,7 @@ class TestWorkspaceIsolation:
         mock_create_hierarchy.return_value = mock_sample_index
 
         mock_param_sub_cmd.return_value = [("$(MERLIN_GLOB_PATH)", "*/")]
-        mock_param_sub_sample.side_effect = lambda s, l, i, p: []
+        mock_param_sub_sample.side_effect = lambda s, labels, i, p: []
 
         # Mock step
         base_workspace = "/workspace/hello"
@@ -495,7 +470,7 @@ class TestWorkspaceIsolation:
         result = expander.expand_chain(chain, context)
 
         # Extract all workspaces
-        workspaces = [task_info['workspace'] for task_info in result[0]]
+        workspaces = [task_info["workspace"] for task_info in result[0]]
 
         # Check all workspaces are unique
         assert len(workspaces) == len(set(workspaces))
@@ -508,16 +483,12 @@ class TestWorkspaceIsolation:
 class TestParameterSubstitutions:
     """Tests for parameter substitutions"""
 
-    @patch('merlin.execution.sample_expander.uniform_directories')
-    @patch('merlin.execution.sample_expander.create_hierarchy')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_cmd')
-    @patch('merlin.execution.sample_expander.parameter_substitutions_for_sample')
+    @patch("merlin.execution.sample_expander.uniform_directories")
+    @patch("merlin.execution.sample_expander.create_hierarchy")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_cmd")
+    @patch("merlin.execution.sample_expander.parameter_substitutions_for_sample")
     def test_parameter_substitutions_applied(
-        self,
-        mock_param_sub_sample,
-        mock_param_sub_cmd,
-        mock_create_hierarchy,
-        mock_uniform_dirs
+        self, mock_param_sub_sample, mock_param_sub_cmd, mock_create_hierarchy, mock_uniform_dirs
     ):
         """Test parameter substitutions are applied correctly"""
         expander = SampleExpander()
@@ -536,13 +507,11 @@ class TestParameterSubstitutions:
 
         # Track calls to parameter_substitutions_for_sample
         sample_sub_calls = []
+
         def track_sample_subs(sample, labels, sample_id, relative_path):
-            sample_sub_calls.append({
-                'sample': sample.tolist(),
-                'labels': labels,
-                'sample_id': sample_id,
-                'relative_path': relative_path
-            })
+            sample_sub_calls.append(
+                {"sample": sample.tolist(), "labels": labels, "sample_id": sample_id, "relative_path": relative_path}
+            )
             return [("$(X0)", str(sample[0])), ("$(X1)", str(sample[1]))]
 
         mock_param_sub_sample.side_effect = track_sample_subs
@@ -575,17 +544,17 @@ class TestParameterSubstitutions:
         assert len(sample_sub_calls) == 2
 
         # Check first sample
-        assert sample_sub_calls[0]['sample'] == [1.5, 2.5]
-        assert sample_sub_calls[0]['labels'] == labels
-        assert sample_sub_calls[0]['sample_id'] == 0
-        assert sample_sub_calls[0]['relative_path'] == "00"
+        assert sample_sub_calls[0]["sample"] == [1.5, 2.5]
+        assert sample_sub_calls[0]["labels"] == labels
+        assert sample_sub_calls[0]["sample_id"] == 0
+        assert sample_sub_calls[0]["relative_path"] == "00"
 
         # Check second sample
-        assert sample_sub_calls[1]['sample'] == [3.5, 4.5]
-        assert sample_sub_calls[1]['labels'] == labels
-        assert sample_sub_calls[1]['sample_id'] == 1
-        assert sample_sub_calls[1]['relative_path'] == "01"
+        assert sample_sub_calls[1]["sample"] == [3.5, 4.5]
+        assert sample_sub_calls[1]["labels"] == labels
+        assert sample_sub_calls[1]["sample_id"] == 1
+        assert sample_sub_calls[1]["relative_path"] == "01"
 
         # Check sample_values in result
-        assert result[0][0]['sample_values'] == {"X0": 1.5, "X1": 2.5}
-        assert result[0][1]['sample_values'] == {"X0": 3.5, "X1": 4.5}
+        assert result[0][0]["sample_values"] == {"X0": 1.5, "X1": 2.5}
+        assert result[0][1]["sample_values"] == {"X0": 3.5, "X1": 4.5}

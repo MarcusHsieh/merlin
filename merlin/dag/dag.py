@@ -10,16 +10,15 @@ Holds the Merlin Directed Acyclic Graph (DAG) class.
 from collections import OrderedDict
 from typing import Dict, List
 
-from merlin.study.step import Step
-
 from merlin.dag.models import ExecutionLevel, ExecutionPlan, TaskChain
+from merlin.study.step import Step
 
 
 # TODO make this an interface, separate from Maestro.
 class DAG:
     """
     Refactored DAG class with cleaner data structures.
-    
+
     This class provides methods on a task graph that Merlin needs for staging
     tasks in Celery. It is initialized from a Maestro `ExecutionGraph`, and the
     major entry point is the group_tasks method, which provides an ExecutionPlan
@@ -67,7 +66,7 @@ class DAG:
     def group_by_depth(self, depths: Dict) -> List[ExecutionLevel]:
         """
         Group DAG tasks by depth, returning ExecutionLevels instead of nested lists.
-        
+
         Each task starts as its own single-task chain. The find_independent_chains
         method will later coalesce compatible tasks into longer chains.
         """
@@ -130,7 +129,7 @@ class DAG:
     def find_independent_chains(self, levels: List[ExecutionLevel]) -> List[ExecutionLevel]:
         """
         Finds independent chains and coalesces them to maximize parallelism.
-        
+
         This is much cleaner than the original nested list manipulation!
         """
         for level in levels:
@@ -141,13 +140,13 @@ class DAG:
                     # Skip if task is not in chain anymore (may have been moved)
                     if task_name not in chain.tasks:
                         continue
-                        
+
                     # Check if this task can be coalesced with its child
                     if self.num_children(task_name) == 1 and task_name != "_source":
                         child = self.children(task_name)[0]
-                        
+
                         if self.num_parents(child) == 1 and self.compatible_merlin_expansion(child, task_name):
-                            
+
                             # Find the child's chain and remove it from there
                             child_chain = self.find_chain_containing_task(child, levels)
                             if child_chain and child_chain != chain:
@@ -158,27 +157,27 @@ class DAG:
         # Clean up empty chains
         for level in levels:
             level.remove_empty_chains()
-        
+
         # Remove empty levels
         non_empty_levels = [level for level in levels if level.parallel_chains]
-        
+
         return non_empty_levels
 
     def group_tasks(self, source_node: str) -> ExecutionPlan:
         """
         Group independent tasks in a DAG, returning a clean ExecutionPlan.
-        
+
         This is much more intuitive than the original nested list approach!
         """
         # Calculate depths
         depths = {}
         self.calc_depth(source_node, depths)
-        
+
         # Group by depth into ExecutionLevels
         levels = self.group_by_depth(depths)
-        
+
         # Find and coalesce independent chains
         optimized_levels = self.find_independent_chains(levels)
-        
+
         # Return a clean ExecutionPlan
         return ExecutionPlan(optimized_levels)

@@ -19,10 +19,10 @@ if an unsupported task executor is requested.
 from typing import Any, Type
 
 from merlin.abstracts import MerlinBaseFactory
+from merlin.exceptions import TaskExecutorNotSupportedError
 from merlin.execution.base import TaskExecutor
 from merlin.execution.celery import CeleryExecutor
 from merlin.execution.local import LocalExecutor
-from merlin.exceptions import TaskExecutorNotSupportedError
 
 
 class MerlinExecutorFactory(MerlinBaseFactory):

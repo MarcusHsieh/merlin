@@ -1323,21 +1323,21 @@ def test_get_task_queues_with_and_without_tag(mocker: MockerFixture, spec: Merli
     ]
     mocker.patch.object(spec, "get_study_steps", return_value=steps)
 
-    # Case 1: omit_tag=False and CONFIG.omit_queue_tag=False → prefix is added
+    # Case 1: omit_tag=False and CONFIG.omit_queue_tag=False -> prefix is added
     result = spec.get_task_queues(omit_tag=False)
     assert result == {
         "step1": "[merlin]_queue1",
         "step2": "[merlin]_queue2",
     }
 
-    # Case 2: omit_tag=True overrides config → prefix is omitted
+    # Case 2: omit_tag=True overrides config -> prefix is omitted
     result2 = spec.get_task_queues(omit_tag=True)
     assert result2 == {
         "step1": "queue1",
         "step2": "queue2",
     }
 
-    # Case 3: CONFIG.omit_queue_tag=True → prefix is omitted
+    # Case 3: CONFIG.omit_queue_tag=True -> prefix is omitted
     mock_config.celery.omit_queue_tag = True
     result3 = spec.get_task_queues(omit_tag=False)
     assert result3 == {
@@ -1651,8 +1651,8 @@ def test_get_tasks_per_step_with_parameters_only(mocker: MockerFixture, spec: Me
     step = SimpleNamespace(name="step1", run={"cmd": "$(param1)", "restart": ""})
     mocker.patch.object(spec, "get_study_steps", return_value=[step])
 
-    # First call: match param → True
-    # Second call: for sample check (which shouldn't happen) → False
+    # First call: match param -> True
+    # Second call: for sample check (which shouldn't happen) -> False
     mocker.patch("merlin.spec.specification.needs_merlin_expansion", side_effect=[True, False])
 
     result = spec.get_tasks_per_step()
@@ -1685,8 +1685,8 @@ def test_get_tasks_per_step_with_samples_and_parameters(mocker: MockerFixture, s
     step = SimpleNamespace(name="step1", run={"cmd": "$(x) $(param1)", "restart": ""})
     mocker.patch.object(spec, "get_study_steps", return_value=[step])
 
-    # First call: param match → True
-    # Second call: column label match → True
+    # First call: param match -> True
+    # Second call: column label match -> True
     mocker.patch("merlin.spec.specification.needs_merlin_expansion", side_effect=[True, True])
 
     result = spec.get_tasks_per_step()

@@ -1,26 +1,28 @@
+##############################################################################
+# Copyright (c) Lawrence Livermore National Security, LLC and other Merlin
+# Project developers. See top-level LICENSE and COPYRIGHT files for dates and
+# other details. No copyright assignment is required to contribute to Merlin.
+##############################################################################
 
-
-"""
-
-"""
+""" """
 
 import time
 import uuid
 from typing import Dict
 
 from merlin.execution.base import TaskExecutor
-from merlin.execution.models import ExecutionContext, TaskResult, TaskStatus
+from merlin.execution.models import ExecutionContext, TaskStatus
 from merlin.study.study import MerlinStudy
 
 
 class WorkflowManager:
     """High-level workflow manager that ties everything together."""
-    
+
     def __init__(self, study: MerlinStudy, executor: TaskExecutor):
         self.study = study
         self.dag = self.study.dag
         self.executor = executor
-    
+
     def run_workflow(self, source_node: str = "_source", wait: bool = False, timeout: int = 7200) -> Dict:
         """
         Run the complete workflow.
@@ -51,7 +53,7 @@ class WorkflowManager:
             study=self.study,
             parameter_info=self.dag.parameter_info,
             execution_id=str(uuid.uuid4()),
-            metadata={"started_at": time.time()}  # TODO not sure what to do with metadata yet
+            metadata={"started_at": time.time()},  # TODO not sure what to do with metadata yet
         )
 
         # 3. Execute the plan
@@ -59,9 +61,9 @@ class WorkflowManager:
         result = self.executor.execute_plan(execution_plan, context, wait=wait, timeout=timeout)
 
         # 4. Report results (handle both old and new return formats)
-        if isinstance(result, dict) and 'results' in result:
+        if isinstance(result, dict) and "results" in result:
             # New format from CeleryExecutor
-            results = result['results']
+            results = result["results"]
         else:
             # Old format (just results dict)
             results = result
@@ -72,4 +74,4 @@ class WorkflowManager:
 
         print(f"Completed: {completed}, Failed: {failed}, Total: {len(results)}")
 
-        return result if isinstance(result, dict) and 'results' in result else {'results': result}
+        return result if isinstance(result, dict) and "results" in result else {"results": result}

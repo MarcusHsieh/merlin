@@ -24,7 +24,6 @@ from merlin.cli.utils import parse_override_vars
 from merlin.config.configfile import initialize_config
 from merlin.execution.executor_factory import executor_factory
 from merlin.execution.workflow_manager import WorkflowManager
-from merlin.router import run_task_server
 from merlin.study.study import MerlinStudy
 from merlin.utils import ARRAY_FILE_FORMATS, verify_filepath
 

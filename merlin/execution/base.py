@@ -1,7 +1,10 @@
+##############################################################################
+# Copyright (c) Lawrence Livermore National Security, LLC and other Merlin
+# Project developers. See top-level LICENSE and COPYRIGHT files for dates and
+# other details. No copyright assignment is required to contribute to Merlin.
+##############################################################################
 
-"""
-
-"""
+""" """
 
 from abc import ABC, abstractmethod
 from typing import Dict, List
@@ -28,12 +31,12 @@ class TaskExecutor(ABC):
             Dictionary containing results and execution information
         """
         pass
-    
+
     @abstractmethod
     def execute_chain(self, chain: TaskChain, context: ExecutionContext) -> List[TaskResult]:
         """Execute a single chain of tasks."""
         pass
-    
+
     @abstractmethod
     def execute_task(self, task_name: str, context: ExecutionContext) -> TaskResult:
         """Execute a single task."""

@@ -1,8 +1,10 @@
+##############################################################################
+# Copyright (c) Lawrence Livermore National Security, LLC and other Merlin
+# Project developers. See top-level LICENSE and COPYRIGHT files for dates and
+# other details. No copyright assignment is required to contribute to Merlin.
+##############################################################################
 
-
-"""
-
-"""
+""" """
 
 import time
 import uuid
@@ -15,7 +17,7 @@ from merlin.execution.models import ExecutionContext, TaskResult, TaskStatus
 
 class CeleryExecutor(TaskExecutor):
     """Celery-based task executor."""
-    
+
     def __init__(self, default_queue: str = "default"):
         from merlin.celery import app
         from merlin.execution.sample_expander import SampleExpander
@@ -24,7 +26,7 @@ class CeleryExecutor(TaskExecutor):
         self.default_queue = default_queue
         self.active_tasks = {}  # Track running tasks
         self.sample_expander = SampleExpander()
-    
+
     def execute_plan(self, plan: ExecutionPlan, context: ExecutionContext, wait: bool = False, timeout: int = 7200) -> Dict:
         """
         Execute the plan using chain(group(...), group(...), ...) pattern.
@@ -48,6 +50,7 @@ class CeleryExecutor(TaskExecutor):
         """
         import json
         import os
+
         from celery import chain, group
 
         all_results = {}
@@ -75,9 +78,7 @@ class CeleryExecutor(TaskExecutor):
                     # This is a virtual chain (e.g., _source only), mark as skipped
                     for task in chain_obj.tasks:
                         all_results[task] = TaskResult(
-                            task_name=task,
-                            status=TaskStatus.SKIPPED,
-                            error="Virtual node, no execution needed"
+                            task_name=task, status=TaskStatus.SKIPPED, error="Virtual node, no execution needed"
                         )
                     continue
 
@@ -86,7 +87,9 @@ class CeleryExecutor(TaskExecutor):
 
                 # Log expansion details
                 total_expanded = sum(len(pos) for pos in expanded_positions)
-                print(f"  Chain '{chain_obj.tasks[0] if chain_obj.tasks else 'unknown'}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions")
+                print(
+                    f"  Chain '{chain_obj.tasks[0] if chain_obj.tasks else 'unknown'}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions"
+                )
 
                 # Build chain with dependencies (creates proper celery chains for each sample)
                 chain_sigs = self._build_chain_with_dependencies(expanded_positions, context)
@@ -96,12 +99,8 @@ class CeleryExecutor(TaskExecutor):
                 # Track tasks as queued
                 for position_tasks in expanded_positions:
                     for task_info in position_tasks:
-                        task_name = task_info['step'].name()
-                        all_results[task_name] = TaskResult(
-                            task_name=task_name,
-                            status=TaskStatus.COMPLETED,
-                            result=None
-                        )
+                        task_name = task_info["step"].name()
+                        all_results[task_name] = TaskResult(task_name=task_name, status=TaskStatus.COMPLETED, result=None)
 
             # Create batches for this level (batch the chain signatures)
             batches = self._create_batches(all_chain_sigs, batch_size=100)
@@ -125,18 +124,18 @@ class CeleryExecutor(TaskExecutor):
             workspace = context.study.workspace
             workflow_info_file = os.path.join(workspace, "WORKFLOW_INFO.json")
             workflow_info = {
-                'workflow_id': workflow_id,
-                'submitted_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'study_name': context.study.expanded_spec.name,
-                'num_levels': len(plan.levels),
-                'num_tasks': len(all_results),
-                'status': 'SUBMITTED'
+                "workflow_id": workflow_id,
+                "submitted_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "study_name": context.study.expanded_spec.name,
+                "num_levels": len(plan.levels),
+                "num_tasks": len(all_results),
+                "status": "SUBMITTED",
             }
 
             try:
-                with open(workflow_info_file, 'w') as f:
+                with open(workflow_info_file, "w") as f:
                     json.dump(workflow_info, f, indent=2)
-                print(f"\nWorkflow submitted!")
+                print("\nWorkflow submitted!")
                 print(f"Workflow ID: {workflow_id}")
                 print(f"Workflow info saved to: {workflow_info_file}")
             except Exception as e:
@@ -148,49 +147,41 @@ class CeleryExecutor(TaskExecutor):
                 print("Press Ctrl+C to stop waiting (workflow will continue in background)")
                 try:
                     async_result.get(timeout=timeout)
-                    print(f"Workflow completed successfully")
+                    print("Workflow completed successfully")
 
                     # update workflow info
                     try:
-                        workflow_info['status'] = 'COMPLETED'
-                        workflow_info['completed_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
-                        with open(workflow_info_file, 'w') as f:
+                        workflow_info["status"] = "COMPLETED"
+                        workflow_info["completed_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                        with open(workflow_info_file, "w") as f:
                             json.dump(workflow_info, f, indent=2)
                     except Exception as e:
                         print(f"Warning: Could not update workflow info: {e}")
 
                 except KeyboardInterrupt:
-                    print(f"\n\nStopped waiting. Workflow continues in background.")
+                    print("\n\nStopped waiting. Workflow continues in background.")
                     print(f"Check status with: merlin status {context.study.expanded_spec.name}")
                     print(f"Workflow ID: {workflow_id}")
                 except Exception as e:
                     print(f"Workflow failed with error: {e}")
                     # mark tasks as failed
                     for task_name in all_results.keys():
-                        all_results[task_name] = TaskResult(
-                            task_name=task_name,
-                            status=TaskStatus.FAILED,
-                            error=str(e)
-                        )
+                        all_results[task_name] = TaskResult(task_name=task_name, status=TaskStatus.FAILED, error=str(e))
 
                     # update workflow info
                     try:
-                        workflow_info['status'] = 'FAILED'
-                        workflow_info['error'] = str(e)
-                        workflow_info['failed_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
-                        with open(workflow_info_file, 'w') as f:
+                        workflow_info["status"] = "FAILED"
+                        workflow_info["error"] = str(e)
+                        workflow_info["failed_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                        with open(workflow_info_file, "w") as f:
                             json.dump(workflow_info, f, indent=2)
                     except Exception as ex:
                         print(f"Warning: Could not update workflow info: {ex}")
 
-            return {
-                'results': all_results,
-                'async_result': async_result,
-                'workflow_id': workflow_id
-            }
+            return {"results": all_results, "async_result": async_result, "workflow_id": workflow_id}
 
-        return {'results': all_results, 'async_result': None, 'workflow_id': None}
-    
+        return {"results": all_results, "async_result": None, "workflow_id": None}
+
     def _execute_level_parallel(self, level: ExecutionLevel, context: ExecutionContext) -> Dict[str, TaskResult]:
         """Execute all chains in a level in parallel, with sample expansion and dependencies."""
         from celery import group
@@ -215,9 +206,7 @@ class CeleryExecutor(TaskExecutor):
                 # This is a virtual chain (e.g., _source only), mark as skipped
                 for task in chain.tasks:
                     level_results[task] = TaskResult(
-                        task_name=task,
-                        status=TaskStatus.SKIPPED,
-                        error="Virtual node, no execution needed"
+                        task_name=task, status=TaskStatus.SKIPPED, error="Virtual node, no execution needed"
                     )
                 continue
 
@@ -226,7 +215,9 @@ class CeleryExecutor(TaskExecutor):
 
             # Log expansion details
             total_expanded = sum(len(pos) for pos in expanded_positions)
-            print(f"  Chain '{chain.tasks[0] if chain.tasks else 'unknown'}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions")
+            print(
+                f"  Chain '{chain.tasks[0] if chain.tasks else 'unknown'}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions"
+            )
 
             # Build chain with dependencies
             chain_sigs = self._build_chain_with_dependencies(expanded_positions, context)
@@ -236,11 +227,9 @@ class CeleryExecutor(TaskExecutor):
             # Mark tasks as queued
             for position_tasks in expanded_positions:
                 for task_info in position_tasks:
-                    task_name = task_info['step'].name()
+                    task_name = task_info["step"].name()
                     level_results[task_name] = TaskResult(
-                        task_name=task_name,
-                        status=TaskStatus.COMPLETED,  # Indicates successfully queued
-                        result=None
+                        task_name=task_name, status=TaskStatus.COMPLETED, result=None  # Indicates successfully queued
                     )
 
         # Count tasks for reporting
@@ -259,30 +248,27 @@ class CeleryExecutor(TaskExecutor):
             try:
                 # Wait for all tasks in this level to complete
                 # Timeout set to 1 hour per level (can be adjusted)
-                results = async_result.get(timeout=3600)
+                _ = async_result.get(timeout=3600)
                 print(f"Level {level.depth} completed successfully")
             except Exception as e:
                 print(f"Level {level.depth} failed with error: {e}")
                 # Mark tasks as failed
                 for task_name in level_results.keys():
-                    level_results[task_name] = TaskResult(
-                        task_name=task_name,
-                        status=TaskStatus.FAILED,
-                        error=str(e)
-                    )
+                    level_results[task_name] = TaskResult(task_name=task_name, status=TaskStatus.FAILED, error=str(e))
 
         return level_results
-    
+
     def _submit_chain_to_celery(self, chain: TaskChain, context: ExecutionContext):
         """Submit a chain to Celery as a chain of tasks."""
         # This would use Celery's chain primitive
         # Simplified example:
         celery_chain = self._build_celery_chain(chain, context)
         return celery_chain.apply_async(queue=self.default_queue)
-    
+
     def _build_celery_chain(self, chain: TaskChain, context: ExecutionContext):
         """Build a Celery chain from a TaskChain."""
         from celery import chain as celery_chain
+
         from merlin.common.tasks import merlin_step
 
         # Get adapter config for tasks
@@ -300,10 +286,7 @@ class CeleryExecutor(TaskExecutor):
                     continue
 
                 # Create signature for merlin_step task
-                sig = merlin_step.s(
-                    step,
-                    adapter_config=adapter_config
-                )
+                sig = merlin_step.s(step, adapter_config=adapter_config)
                 sig.set(queue=step.get_task_queue())
                 celery_tasks.append(sig)
             except (AttributeError, KeyError, TypeError):
@@ -317,11 +300,7 @@ class CeleryExecutor(TaskExecutor):
         for level in plan.levels:
             if level.depth > failed_depth:
                 for task in level.get_all_tasks():
-                    results[task] = TaskResult(
-                        task_name=task,
-                        status=TaskStatus.SKIPPED,
-                        error="Dependency failed"
-                    )
+                    results[task] = TaskResult(task_name=task, status=TaskStatus.SKIPPED, error="Dependency failed")
 
     def _create_batches(self, task_infos: List[Dict], batch_size: int = 100) -> List[List[Dict]]:
         """
@@ -339,7 +318,7 @@ class CeleryExecutor(TaskExecutor):
 
         batches = []
         for i in range(0, len(task_infos), batch_size):
-            batch = task_infos[i:i + batch_size]
+            batch = task_infos[i : i + batch_size]
             batches.append(batch)
 
         print(f"Created {len(batches)} batches from {len(task_infos)} tasks (batch_size={batch_size})")
@@ -358,7 +337,7 @@ class CeleryExecutor(TaskExecutor):
         """
         from merlin.common.tasks import merlin_step
 
-        step = task_info['step']
+        step = task_info["step"]
         sig = merlin_step.s(step, adapter_config=adapter_config)
         sig.set(queue=step.get_task_queue())
         return sig
@@ -406,17 +385,12 @@ class CeleryExecutor(TaskExecutor):
         Returns:
             List of signatures with dependencies properly linked
         """
-        from celery import group
-
         adapter_config = context.study.get_adapter_config(override_type="celery")
 
         # Convert each position's tasks to signatures
         all_sig_chains = []
         for position_tasks in expanded_positions:
-            position_sigs = [
-                self._create_task_signature(task_info, adapter_config)
-                for task_info in position_tasks
-            ]
+            position_sigs = [self._create_task_signature(task_info, adapter_config) for task_info in position_tasks]
             all_sig_chains.append(position_sigs)
 
         # Link positions with dependencies
@@ -432,6 +406,7 @@ class CeleryExecutor(TaskExecutor):
     def execute_chain(self, chain: TaskChain, context: ExecutionContext) -> List[TaskResult]:
         """Execute a single chain via Celery chain primitive."""
         from celery import chain as celery_chain
+
         from merlin.common.tasks import merlin_step
 
         results = []
@@ -446,11 +421,9 @@ class CeleryExecutor(TaskExecutor):
 
                 # Skip virtual nodes
                 if step is None:
-                    results.append(TaskResult(
-                        task_name=task_name,
-                        status=TaskStatus.SKIPPED,
-                        error="Virtual node, no execution needed"
-                    ))
+                    results.append(
+                        TaskResult(task_name=task_name, status=TaskStatus.SKIPPED, error="Virtual node, no execution needed")
+                    )
                     continue
 
                 sig = merlin_step.s(step, adapter_config=adapter_config)
@@ -459,36 +432,27 @@ class CeleryExecutor(TaskExecutor):
                 real_task_names.append(task_name)
             except (AttributeError, KeyError, TypeError):
                 # This is a virtual node, skip it
-                results.append(TaskResult(
-                    task_name=task_name,
-                    status=TaskStatus.SKIPPED,
-                    error="Virtual node, no execution needed"
-                ))
+                results.append(
+                    TaskResult(task_name=task_name, status=TaskStatus.SKIPPED, error="Virtual node, no execution needed")
+                )
 
         # Execute chain (only if there are real tasks)
         if sigs:
             try:
                 start_time = time.time()
                 async_result = celery_chain(*sigs).apply_async()
-                result = async_result.get(timeout=3600)  # 1 hour timeout
+                _ = async_result.get(timeout=3600)  # 1 hour timeout
                 end_time = time.time()
 
                 # Create success results for all real tasks
                 for task_name in real_task_names:
-                    results.append(TaskResult(
-                        task_name=task_name,
-                        status=TaskStatus.COMPLETED,
-                        start_time=start_time,
-                        end_time=end_time
-                    ))
+                    results.append(
+                        TaskResult(task_name=task_name, status=TaskStatus.COMPLETED, start_time=start_time, end_time=end_time)
+                    )
             except Exception as e:
                 # Mark all real tasks in chain as failed
                 for task_name in real_task_names:
-                    results.append(TaskResult(
-                        task_name=task_name,
-                        status=TaskStatus.FAILED,
-                        error=str(e)
-                    ))
+                    results.append(TaskResult(task_name=task_name, status=TaskStatus.FAILED, error=str(e)))
 
         return results
 
@@ -502,11 +466,7 @@ class CeleryExecutor(TaskExecutor):
 
             # Skip virtual nodes
             if step is None:
-                return TaskResult(
-                    task_name=task_name,
-                    status=TaskStatus.SKIPPED,
-                    error="Virtual node, no execution needed"
-                )
+                return TaskResult(task_name=task_name, status=TaskStatus.SKIPPED, error="Virtual node, no execution needed")
 
             celery_id = str(uuid.uuid4())
 
@@ -531,19 +491,15 @@ class CeleryExecutor(TaskExecutor):
                 start_time=start_time,
                 end_time=end_time,
                 result=result,
-                celery_id=celery_id
+                celery_id=celery_id,
             )
         except (AttributeError, KeyError, TypeError):
             # This is a virtual node
-            return TaskResult(
-                task_name=task_name,
-                status=TaskStatus.SKIPPED,
-                error="Virtual node, no execution needed"
-            )
+            return TaskResult(task_name=task_name, status=TaskStatus.SKIPPED, error="Virtual node, no execution needed")
         except Exception as e:
             return TaskResult(
                 task_name=task_name,
                 status=TaskStatus.FAILED,
                 error=str(e),
-                celery_id=celery_id if 'celery_id' in locals() else None
+                celery_id=celery_id if "celery_id" in locals() else None,
             )

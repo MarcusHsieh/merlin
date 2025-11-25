@@ -1,14 +1,17 @@
-
+##############################################################################
+# Copyright (c) Lawrence Livermore National Security, LLC and other Merlin
+# Project developers. See top-level LICENSE and COPYRIGHT files for dates and
+# other details. No copyright assignment is required to contribute to Merlin.
+##############################################################################
 
 """
 LocalExecutor with sample expansion support.
 """
 
 import json
-import os
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Callable, Dict, List
+from typing import Dict, List
 
 from merlin.dag.models import ExecutionPlan, TaskChain
 from merlin.execution.base import TaskExecutor
@@ -18,16 +21,13 @@ from merlin.execution.sample_expander import SampleExpander
 
 def write_status(status_file: str, status: str, return_code=None, elapsed_time=None):
     """Write status information to a JSON file."""
-    status_data = {
-        'status': status,
-        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
-    }
+    status_data = {"status": status, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")}
     if return_code is not None:
-        status_data['return_code'] = return_code
+        status_data["return_code"] = return_code
     if elapsed_time is not None:
-        status_data['elapsed_time'] = elapsed_time
+        status_data["elapsed_time"] = elapsed_time
 
-    with open(status_file, 'w') as f:
+    with open(status_file, "w") as f:
         json.dump(status_data, f, indent=2)
 
 
@@ -44,7 +44,9 @@ class LocalExecutor(TaskExecutor):
         self.sample_expander = SampleExpander()
         self.max_workers = max_workers
 
-    def execute_plan(self, plan: ExecutionPlan, context: ExecutionContext, wait: bool = True, timeout: int = 7200) -> Dict[str, TaskResult]:
+    def execute_plan(
+        self, plan: ExecutionPlan, context: ExecutionContext, wait: bool = True, timeout: int = 7200
+    ) -> Dict[str, TaskResult]:
         """
         Execute plan level-by-level using local process pool.
 
@@ -69,8 +71,7 @@ class LocalExecutor(TaskExecutor):
                 all_results.update(level_results)
 
                 # Check for failures
-                failed = [k for k, v in level_results.items()
-                         if v.status == TaskStatus.FAILED]
+                failed = [k for k, v in level_results.items() if v.status == TaskStatus.FAILED]
                 if failed:
                     print(f"Level {level.depth} had failures: {failed}")
                     print("Stopping execution due to failures")
@@ -79,10 +80,7 @@ class LocalExecutor(TaskExecutor):
         return all_results
 
     def _execute_level_parallel(
-        self,
-        level,
-        context: ExecutionContext,
-        executor: ProcessPoolExecutor
+        self, level, context: ExecutionContext, executor: ProcessPoolExecutor
     ) -> Dict[str, TaskResult]:
         """
         Execute all chains in a level using process pool.
@@ -96,18 +94,13 @@ class LocalExecutor(TaskExecutor):
             Dictionary mapping task names to TaskResults
         """
         level_results = {}
-        futures = {}
 
         for chain in level.parallel_chains:
             # Skip virtual nodes
             has_real_tasks = self._has_real_tasks(chain, context)
             if not has_real_tasks:
                 for task in chain.tasks:
-                    level_results[task] = TaskResult(
-                        task_name=task,
-                        status=TaskStatus.SKIPPED,
-                        error="Virtual node"
-                    )
+                    level_results[task] = TaskResult(task_name=task, status=TaskStatus.SKIPPED, error="Virtual node")
                 continue
 
             # Expand chain with samples
@@ -115,21 +108,18 @@ class LocalExecutor(TaskExecutor):
 
             # Log expansion details
             total_expanded = sum(len(pos) for pos in expanded_positions)
-            print(f"  Chain '{chain.tasks[0] if chain.tasks else 'unknown'}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions")
+            print(
+                f"  Chain '{chain.tasks[0] if chain.tasks else 'unknown'}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions"
+            )
 
             # Execute chain with dependencies (sequential positions, parallel samples)
-            position_results = self._execute_chain_with_dependencies(
-                expanded_positions, context, executor
-            )
+            position_results = self._execute_chain_with_dependencies(expanded_positions, context, executor)
             level_results.update(position_results)
 
         return level_results
 
     def _execute_chain_with_dependencies(
-        self,
-        expanded_positions: List[List[Dict]],
-        context: ExecutionContext,
-        executor: ProcessPoolExecutor
+        self, expanded_positions: List[List[Dict]], context: ExecutionContext, executor: ProcessPoolExecutor
     ) -> Dict[str, TaskResult]:
         """
         Execute a chain with multiple positions sequentially.
@@ -157,39 +147,29 @@ class LocalExecutor(TaskExecutor):
             # Submit all tasks at this position (parallel)
             position_futures = {}
             for task_info in position_tasks:
-                future = executor.submit(
-                    self._execute_step_wrapper,
-                    task_info['step'],
-                    adapter_config
-                )
+                future = executor.submit(self._execute_step_wrapper, task_info["step"], adapter_config)
                 position_futures[future] = task_info
 
             # Wait for this position to complete before moving to next
             for future in as_completed(position_futures):
                 task_info = position_futures[future]
-                task_name = task_info['step'].name()
+                task_name = task_info["step"].name()
 
                 try:
                     return_code = future.result(timeout=3600)  # 1 hour timeout per task
 
                     if return_code == 0:
                         all_results[task_name] = TaskResult(
-                            task_name=task_name,
-                            status=TaskStatus.COMPLETED,
-                            result=return_code
+                            task_name=task_name, status=TaskStatus.COMPLETED, result=return_code
                         )
                     else:
                         all_results[task_name] = TaskResult(
                             task_name=task_name,
                             status=TaskStatus.FAILED,
-                            error=f"Task returned non-zero exit code: {return_code}"
+                            error=f"Task returned non-zero exit code: {return_code}",
                         )
                 except Exception as e:
-                    all_results[task_name] = TaskResult(
-                        task_name=task_name,
-                        status=TaskStatus.FAILED,
-                        error=str(e)
-                    )
+                    all_results[task_name] = TaskResult(task_name=task_name, status=TaskStatus.FAILED, error=str(e))
 
         return all_results
 
@@ -208,12 +188,8 @@ class LocalExecutor(TaskExecutor):
         Returns:
             Return code (0 for success, non-zero for failure)
         """
-        import time
         import os
         import traceback
-
-        workspace = None
-        status_file = None
 
         try:
             # Get workspace
@@ -224,6 +200,7 @@ class LocalExecutor(TaskExecutor):
             finished_file = f"{workspace}/MERLIN_FINISHED"
             if os.path.exists(finished_file):
                 import logging
+
                 LOG = logging.getLogger(__name__)
                 LOG.info(f"Skipping step '{step_name}' in '{workspace}' (already finished).")
                 return 0
@@ -240,6 +217,7 @@ class LocalExecutor(TaskExecutor):
         except Exception as e:
             # Log exception
             import logging
+
             LOG = logging.getLogger(__name__)
             LOG.error(f"Error executing step {step.name()}: {e}")
             LOG.debug(traceback.format_exc())
@@ -285,15 +263,7 @@ class LocalExecutor(TaskExecutor):
             end_time = time.time()
 
             return TaskResult(
-                task_name=task_name,
-                status=TaskStatus.COMPLETED,
-                start_time=start_time,
-                end_time=end_time,
-                result=result
+                task_name=task_name, status=TaskStatus.COMPLETED, start_time=start_time, end_time=end_time, result=result
             )
         except Exception as e:
-            return TaskResult(
-                task_name=task_name,
-                status=TaskStatus.FAILED,
-                error=str(e)
-            )
+            return TaskResult(task_name=task_name, status=TaskStatus.FAILED, error=str(e))
