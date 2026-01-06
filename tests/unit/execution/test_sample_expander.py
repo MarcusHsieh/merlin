@@ -383,7 +383,7 @@ class TestGlobPathCalculation:
         mock_sample_index.make_directory_string.return_value = ":".join(
             [f"{i:02d}/{j:02d}" for i in range(4) for j in range(25)]
         )
-        mock_sample_index.get_path_to_sample.side_effect = lambda i: f"{i//25:02d}/{i%25:02d}"
+        mock_sample_index.get_path_to_sample.side_effect = lambda i: f"{i // 25:02d}/{i % 25:02d}"
         mock_create_hierarchy.return_value = mock_sample_index
 
         captured_glob_path = None
