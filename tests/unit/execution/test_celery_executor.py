@@ -12,12 +12,12 @@ import json
 import os
 import sys
 import tempfile
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
 from merlin.dag.models import ExecutionLevel, ExecutionPlan, TaskChain
-from merlin.execution.models import ExecutionContext, TaskResult, TaskStatus
+from merlin.execution.models import TaskStatus
 
 
 # Create mock modules for Celery dependencies
@@ -39,9 +39,6 @@ def mock_celery_imports():
     mock_celery = Mock()
     mock_celery.chain = Mock()
     mock_celery.group = Mock()
-
-    # Create mock merlin_step
-    mock_merlin_step = Mock()
 
     # Patch sys.modules for imports that happen inside methods
     with patch.dict(
@@ -429,7 +426,7 @@ class TestExecutePlanWorkflow:
             with patch("merlin.common.tasks.merlin_step") as mock_merlin_step:
                 mock_sig = Mock()
                 mock_merlin_step.s.return_value = mock_sig
-                result = executor.execute_plan(plan, context, wait=False)
+                executor.execute_plan(plan, context, wait=False)
 
                 # Check WORKFLOW_INFO.json was created
                 workflow_info_path = os.path.join(tmpdir, "WORKFLOW_INFO.json")
@@ -546,7 +543,7 @@ class TestExecutePlanWaitBehavior:
             with patch("merlin.common.tasks.merlin_step") as mock_merlin_step:
                 mock_sig = Mock()
                 mock_merlin_step.s.return_value = mock_sig
-                result = executor.execute_plan(plan, context, wait=False)
+                executor.execute_plan(plan, context, wait=False)
 
         # async_result.get() should NOT be called when wait=False
         mock_async.get.assert_not_called()
@@ -590,7 +587,7 @@ class TestExecutePlanWaitBehavior:
             with patch("merlin.common.tasks.merlin_step") as mock_merlin_step:
                 mock_sig = Mock()
                 mock_merlin_step.s.return_value = mock_sig
-                result = executor.execute_plan(plan, context, wait=True, timeout=60)
+                executor.execute_plan(plan, context, wait=True, timeout=60)
 
         # async_result.get() should be called with timeout
         mock_async.get.assert_called_once_with(timeout=60)

@@ -11,8 +11,6 @@ Tests for MerlinStepRecord._update_status_file() auto-detection of task_server.
 import tempfile
 from unittest.mock import Mock, patch
 
-import pytest
-
 from maestrowf.abstracts.enums import State
 
 from merlin.study.step import MerlinStepRecord

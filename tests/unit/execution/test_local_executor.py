@@ -8,8 +8,6 @@
 Tests for the LocalExecutor class.
 """
 
-import os
-import tempfile
 from concurrent.futures import Future
 from unittest.mock import MagicMock, Mock, patch
 
@@ -17,7 +15,7 @@ import pytest
 
 from merlin.dag.models import ExecutionLevel, ExecutionPlan, TaskChain
 from merlin.execution.local import LocalExecutor
-from merlin.execution.models import ExecutionContext, TaskResult, TaskStatus
+from merlin.execution.models import TaskResult, TaskStatus
 
 
 class TestLocalExecutorInit:

@@ -8,11 +8,9 @@
 Tests for the WorkflowManager class.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-import pytest
-
-from merlin.execution.models import ExecutionContext, TaskResult, TaskStatus
+from merlin.execution.models import TaskResult, TaskStatus
 from merlin.execution.workflow_manager import WorkflowManager
 
 
@@ -346,7 +344,7 @@ class TestRunWorkflowWithLevels:
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
-        result = manager.run_workflow()
+        manager.run_workflow()
 
         # Should have called execute_plan with the plan
         call_args = mock_executor.execute_plan.call_args[0]
