@@ -31,11 +31,6 @@ class CeleryExecutor(TaskExecutor):
         """
         Execute the plan using chain(group(...), group(...), ...) pattern.
 
-        This creates a single Celery workflow where:
-        - Each batch is a group() (tasks execute in parallel)
-        - Batches are chained together (sequential execution)
-        - Levels are naturally separated by the chain structure
-
         Args:
             plan: Execution plan to execute
             context: Execution context
@@ -43,144 +38,157 @@ class CeleryExecutor(TaskExecutor):
             timeout: Timeout in seconds when using wait=True. Default: 7200 (2 hours)
 
         Returns:
-            Dictionary containing:
-                - 'results': Dict of task results
-                - 'async_result': Celery AsyncResult object (if workflow was submitted)
-                - 'workflow_id': Workflow ID string (if workflow was submitted)
+            Dictionary with 'results', 'async_result', and 'workflow_id'
         """
-        import json
-        import os
-
         from celery import chain, group
 
         all_results = {}
-        all_groups = []  # List of group() primitives to chain together
+        all_groups = []
 
         # Build all groups upfront
         for level in plan.levels:
-            print(f"Preparing depth {level.depth} with {len(level.parallel_chains)} parallel chains...")
-
-            # Expand and build chain signatures for this level
-            all_chain_sigs = []
-            for chain_obj in level.parallel_chains:
-                # Check if chain has real tasks (not virtual nodes)
-                has_real_tasks = False
-                for task in chain_obj.tasks:
-                    try:
-                        step = context.study.dag.step(task)
-                        if step is not None:
-                            has_real_tasks = True
-                            break
-                    except (AttributeError, KeyError, TypeError):
-                        pass
-
-                if not has_real_tasks:
-                    # This is a virtual chain (e.g., _source only), mark as skipped
-                    for task in chain_obj.tasks:
-                        all_results[task] = TaskResult(
-                            task_name=task, status=TaskStatus.SKIPPED, error="Virtual node, no execution needed"
-                        )
-                    continue
-
-                # Expand chain into 2D structure: [[pos0_tasks], [pos1_tasks], ...]
-                expanded_positions = self.sample_expander.expand_chain(chain_obj, context)
-
-                # Log expansion details
-                total_expanded = sum(len(pos) for pos in expanded_positions)
-                print(
-                    f"  Chain '{chain_obj.tasks[0] if chain_obj.tasks else 'unknown'}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions"
-                )
-
-                # Build chain with dependencies (creates proper celery chains for each sample)
-                chain_sigs = self._build_chain_with_dependencies(expanded_positions, context)
-                all_chain_sigs.extend(chain_sigs)
-                print(f"  Created {len(chain_sigs)} Celery chain signatures")
-
-                # Track tasks as queued
-                for position_tasks in expanded_positions:
-                    for task_info in position_tasks:
-                        task_name = task_info["step"].name()
-                        all_results[task_name] = TaskResult(task_name=task_name, status=TaskStatus.COMPLETED, result=None)
-
-            # Create batches for this level (batch the chain signatures)
-            batches = self._create_batches(all_chain_sigs, batch_size=100)
-            print(f"Level {level.depth}: {len(all_chain_sigs)} chain signatures split into {len(batches)} batches")
-
-            # Convert each batch to a group()
-            for batch_idx, batch in enumerate(batches):
+            chain_sigs, level_results = self._process_level(level, context)
+            all_results.update(level_results)
+            batches = self._create_batches(chain_sigs, batch_size=100)
+            for batch in batches:
                 if batch:
-                    batch_group = group(*batch)
-                    all_groups.append(batch_group)
-                    print(f"  Created batch group {batch_idx + 1}/{len(batches)} with {len(batch)} chain signatures")
+                    all_groups.append(group(*batch))
 
-        # Chain all groups together and execute
-        if all_groups:
-            print(f"\nSubmitting workflow chain with {len(all_groups)} batch groups...")
-            workflow_chain = chain(*all_groups)
-            async_result = workflow_chain.apply_async()
-            workflow_id = async_result.id
+        # Submit and handle workflow
+        if not all_groups:
+            return {"results": all_results, "async_result": None, "workflow_id": None}
 
-            # store workflow information in workspace
-            workspace = context.study.workspace
-            workflow_info_file = os.path.join(workspace, "WORKFLOW_INFO.json")
-            workflow_info = {
-                "workflow_id": workflow_id,
-                "submitted_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "study_name": context.study.expanded_spec.name,
-                "num_levels": len(plan.levels),
-                "num_tasks": len(all_results),
-                "status": "SUBMITTED",
-            }
+        async_result, workflow_id = self._submit_workflow(all_groups, chain)
+        workflow_info = self._write_workflow_info(context, plan, all_results, workflow_id)
 
+        if wait:
+            self._wait_for_completion(async_result, workflow_info, all_results, context, timeout)
+
+        return {"results": all_results, "async_result": async_result, "workflow_id": workflow_id}
+
+    def _process_level(self, level: ExecutionLevel, context: ExecutionContext) -> tuple:
+        """Process a single level and return chain signatures and results."""
+        print(f"Preparing depth {level.depth} with {len(level.parallel_chains)} parallel chains...")
+
+        all_chain_sigs = []
+        level_results = {}
+
+        for chain_obj in level.parallel_chains:
+            if not self._chain_has_real_tasks(chain_obj, context):
+                for task in chain_obj.tasks:
+                    level_results[task] = TaskResult(
+                        task_name=task, status=TaskStatus.SKIPPED, error="Virtual node, no execution needed"
+                    )
+                continue
+
+            chain_sigs, task_results = self._expand_and_build_chain(chain_obj, context)
+            all_chain_sigs.extend(chain_sigs)
+            level_results.update(task_results)
+
+        print(f"Level {level.depth}: {len(all_chain_sigs)} chain signatures")
+        return all_chain_sigs, level_results
+
+    def _chain_has_real_tasks(self, chain_obj: TaskChain, context: ExecutionContext) -> bool:
+        """Check if a chain has any real (non-virtual) tasks."""
+        for task in chain_obj.tasks:
             try:
-                with open(workflow_info_file, "w") as f:
-                    json.dump(workflow_info, f, indent=2)
-                print("\nWorkflow submitted!")
-                print(f"Workflow ID: {workflow_id}")
-                print(f"Workflow info saved to: {workflow_info_file}")
-            except Exception as e:
-                print(f"Warning: Could not save workflow info: {e}")
+                step = context.study.dag.step(task)
+                if step is not None:
+                    return True
+            except (AttributeError, KeyError, TypeError):
+                pass
+        return False
 
-            # wait for completion if requested
-            if wait:
-                print(f"\nWaiting for workflow to complete (timeout: {timeout}s)...")
-                print("Press Ctrl+C to stop waiting (workflow will continue in background)")
-                try:
-                    async_result.get(timeout=timeout)
-                    print("Workflow completed successfully")
+    def _expand_and_build_chain(self, chain_obj: TaskChain, context: ExecutionContext) -> tuple:
+        """Expand a chain and build Celery signatures."""
+        expanded_positions = self.sample_expander.expand_chain(chain_obj, context)
 
-                    # update workflow info
-                    try:
-                        workflow_info["status"] = "COMPLETED"
-                        workflow_info["completed_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                        with open(workflow_info_file, "w") as f:
-                            json.dump(workflow_info, f, indent=2)
-                    except Exception as e:
-                        print(f"Warning: Could not update workflow info: {e}")
+        total_expanded = sum(len(pos) for pos in expanded_positions)
+        chain_name = chain_obj.tasks[0] if chain_obj.tasks else "unknown"
+        print(f"  Chain '{chain_name}' expanded to {total_expanded} tasks across {len(expanded_positions)} positions")
 
-                except KeyboardInterrupt:
-                    print("\n\nStopped waiting. Workflow continues in background.")
-                    print(f"Check status with: merlin status {context.study.expanded_spec.name}")
-                    print(f"Workflow ID: {workflow_id}")
-                except Exception as e:
-                    print(f"Workflow failed with error: {e}")
-                    # mark tasks as failed
-                    for task_name in all_results.keys():
-                        all_results[task_name] = TaskResult(task_name=task_name, status=TaskStatus.FAILED, error=str(e))
+        chain_sigs = self._build_chain_with_dependencies(expanded_positions, context)
+        print(f"  Created {len(chain_sigs)} Celery chain signatures")
 
-                    # update workflow info
-                    try:
-                        workflow_info["status"] = "FAILED"
-                        workflow_info["error"] = str(e)
-                        workflow_info["failed_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                        with open(workflow_info_file, "w") as f:
-                            json.dump(workflow_info, f, indent=2)
-                    except Exception as ex:
-                        print(f"Warning: Could not update workflow info: {ex}")
+        task_results = {}
+        for position_tasks in expanded_positions:
+            for task_info in position_tasks:
+                task_name = task_info["step"].name()
+                task_results[task_name] = TaskResult(task_name=task_name, status=TaskStatus.COMPLETED, result=None)
 
-            return {"results": all_results, "async_result": async_result, "workflow_id": workflow_id}
+        return chain_sigs, task_results
 
-        return {"results": all_results, "async_result": None, "workflow_id": None}
+    def _submit_workflow(self, all_groups: List, chain_func) -> tuple:
+        """Submit the workflow chain and return async_result and workflow_id."""
+        print(f"\nSubmitting workflow chain with {len(all_groups)} batch groups...")
+        workflow_chain = chain_func(*all_groups)
+        async_result = workflow_chain.apply_async()
+        workflow_id = async_result.id
+        return async_result, workflow_id
+
+    def _write_workflow_info(self, context: ExecutionContext, plan: ExecutionPlan, results: Dict, workflow_id: str) -> Dict:
+        """Write workflow info to JSON file and return the info dict."""
+        import json
+        import os
+
+        workspace = context.study.workspace
+        workflow_info_file = os.path.join(workspace, "WORKFLOW_INFO.json")
+        workflow_info = {
+            "workflow_id": workflow_id,
+            "submitted_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "study_name": context.study.expanded_spec.name,
+            "num_levels": len(plan.levels),
+            "num_tasks": len(results),
+            "status": "SUBMITTED",
+            "_file_path": workflow_info_file,
+        }
+
+        try:
+            with open(workflow_info_file, "w") as f:
+                json.dump({k: v for k, v in workflow_info.items() if not k.startswith("_")}, f, indent=2)
+            print(f"\nWorkflow submitted! ID: {workflow_id}")
+            print(f"Workflow info saved to: {workflow_info_file}")
+        except Exception as e:
+            print(f"Warning: Could not save workflow info: {e}")
+
+        return workflow_info
+
+    def _wait_for_completion(self, async_result, workflow_info: Dict, results: Dict, context: ExecutionContext, timeout: int):
+        """Wait for workflow completion and update status."""
+        print(f"\nWaiting for workflow to complete (timeout: {timeout}s)...")
+        print("Press Ctrl+C to stop waiting (workflow will continue in background)")
+
+        try:
+            async_result.get(timeout=timeout)
+            print("Workflow completed successfully")
+            self._update_workflow_status(workflow_info, "COMPLETED")
+        except KeyboardInterrupt:
+            print("\n\nStopped waiting. Workflow continues in background.")
+            print(f"Check status with: merlin status {context.study.expanded_spec.name}")
+            print(f"Workflow ID: {workflow_info['workflow_id']}")
+        except Exception as e:
+            print(f"Workflow failed with error: {e}")
+            for task_name in results.keys():
+                results[task_name] = TaskResult(task_name=task_name, status=TaskStatus.FAILED, error=str(e))
+            self._update_workflow_status(workflow_info, "FAILED", error=str(e))
+
+    def _update_workflow_status(self, workflow_info: Dict, status: str, error: str = None):
+        """Update workflow info file with new status."""
+        import json
+
+        workflow_info["status"] = status
+        timestamp_key = "completed_at" if status == "COMPLETED" else "failed_at"
+        workflow_info[timestamp_key] = time.strftime("%Y-%m-%d %H:%M:%S")
+        if error:
+            workflow_info["error"] = error
+
+        try:
+            file_path = workflow_info.get("_file_path")
+            if file_path:
+                with open(file_path, "w") as f:
+                    json.dump({k: v for k, v in workflow_info.items() if not k.startswith("_")}, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Could not update workflow info: {e}")
 
     def _execute_level_parallel(self, level: ExecutionLevel, context: ExecutionContext) -> Dict[str, TaskResult]:
         """Execute all chains in a level in parallel, with sample expansion and dependencies."""
