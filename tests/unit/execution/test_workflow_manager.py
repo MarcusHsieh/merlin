@@ -8,26 +8,48 @@
 Tests for the WorkflowManager class.
 """
 
+from collections import OrderedDict
 from unittest.mock import Mock
 
 from merlin.execution.models import TaskResult, TaskStatus
 from merlin.execution.workflow_manager import WorkflowManager
 
 
+def create_mock_study_with_dag():
+    """
+    Create a properly configured mock study with dag attributes.
+
+    WorkflowManager creates its own ExecutionDAG from study.dag's attributes,
+    so we need to provide proper values for those attributes.
+    """
+    mock_study = Mock()
+    mock_dag = Mock()
+
+    # Provide proper values for DAG attributes needed by ExecutionDAG constructor
+    mock_dag.maestro_adjacency_table = OrderedDict()
+    mock_dag.maestro_values = OrderedDict()
+    mock_dag.column_labels = []
+    mock_dag.study_name = "test_study"
+    mock_dag.parameter_info = {}
+
+    mock_study.dag = mock_dag
+    return mock_study, mock_dag
+
+
 class TestWorkflowManagerInit:
     """Tests for WorkflowManager.__init__()"""
 
     def test_init_sets_study_and_executor(self):
-        """Test that __init__ sets study, dag, and executor"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        """Test that __init__ sets study and executor, and creates its own DAG"""
+        mock_study, mock_dag = create_mock_study_with_dag()
         mock_executor = Mock()
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
 
         assert manager.study == mock_study
-        assert manager.dag == mock_dag
+        # DAG is created from study.dag's attributes, not the same object
+        assert manager.dag is not mock_dag
+        assert manager.dag.study_name == "test_study"
         assert manager.executor == mock_executor
 
 
@@ -36,56 +58,51 @@ class TestRunWorkflowBasic:
 
     def test_run_workflow_generates_execution_plan(self):
         """Test that run_workflow generates execution plan from DAG"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        # Mock the manager's dag.group_tasks after creation
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow()
 
         # Should call group_tasks with default source_node
-        mock_dag.group_tasks.assert_called_once_with("_source")
+        manager.dag.group_tasks.assert_called_once_with("_source")
 
     def test_run_workflow_custom_source_node(self):
         """Test that run_workflow uses custom source_node"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow(source_node="custom_start")
 
-        mock_dag.group_tasks.assert_called_once_with("custom_start")
+        manager.dag.group_tasks.assert_called_once_with("custom_start")
 
     def test_run_workflow_creates_execution_context(self):
         """Test that run_workflow creates ExecutionContext with correct fields"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
-        mock_dag.parameter_info = {"param1": "value1"}
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
+        manager.dag.parameter_info = {"param1": "value1"}
         manager.run_workflow()
 
         # Check that execute_plan was called with an ExecutionContext
@@ -103,18 +120,16 @@ class TestRunWorkflowWaitBehavior:
 
     def test_run_workflow_wait_false_passes_to_executor(self):
         """Test that run_workflow(wait=False) passes wait=False to executor"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow(wait=False)
 
         # Check wait=False was passed
@@ -123,18 +138,16 @@ class TestRunWorkflowWaitBehavior:
 
     def test_run_workflow_wait_true_passes_to_executor(self):
         """Test that run_workflow(wait=True) passes wait=True to executor"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow(wait=True)
 
         # Check wait=True was passed
@@ -143,18 +156,16 @@ class TestRunWorkflowWaitBehavior:
 
     def test_run_workflow_default_wait_is_false(self):
         """Test that run_workflow defaults to wait=False (non-blocking)"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow()  # No wait argument
 
         # Check wait=False (default)
@@ -163,18 +174,16 @@ class TestRunWorkflowWaitBehavior:
 
     def test_run_workflow_timeout_passes_to_executor(self):
         """Test that run_workflow passes timeout to executor"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow(wait=True, timeout=60)
 
         # Check timeout was passed
@@ -183,18 +192,16 @@ class TestRunWorkflowWaitBehavior:
 
     def test_run_workflow_default_timeout_is_7200(self):
         """Test that run_workflow defaults to timeout=7200 (2 hours)"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow()
 
         # Check timeout=7200 (default)
@@ -207,13 +214,10 @@ class TestRunWorkflowReturnFormats:
 
     def test_run_workflow_handles_new_format_with_results_key(self):
         """Test run_workflow handles new format {'results': {...}, 'workflow_id': ...}"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         # New format from CeleryExecutor
@@ -224,6 +228,7 @@ class TestRunWorkflowReturnFormats:
         }
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         result = manager.run_workflow()
 
         # Should return the dict as-is
@@ -233,19 +238,17 @@ class TestRunWorkflowReturnFormats:
 
     def test_run_workflow_handles_old_format_dict_only(self):
         """Test run_workflow handles old format (just results dict)"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         # Old format from LocalExecutor (just results dict)
         mock_executor.execute_plan.return_value = {"task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         result = manager.run_workflow()
 
         # Should wrap in {"results": ...}
@@ -258,13 +261,10 @@ class TestRunWorkflowResultCounting:
 
     def test_run_workflow_counts_completed_tasks(self):
         """Test that run_workflow correctly counts completed tasks"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {
@@ -276,6 +276,7 @@ class TestRunWorkflowResultCounting:
         }
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         result = manager.run_workflow()
 
         # Should have 3 results
@@ -283,13 +284,10 @@ class TestRunWorkflowResultCounting:
 
     def test_run_workflow_counts_failed_tasks(self):
         """Test that run_workflow correctly counts failed tasks"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {
@@ -301,6 +299,7 @@ class TestRunWorkflowResultCounting:
         }
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         result = manager.run_workflow()
 
         # Count failed tasks
@@ -313,9 +312,7 @@ class TestRunWorkflowWithLevels:
 
     def test_run_workflow_handles_multi_level_plan(self):
         """Test run_workflow handles execution plan with multiple levels"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         # Create mock plan with multiple levels
         mock_level0 = Mock()
@@ -332,12 +329,12 @@ class TestRunWorkflowWithLevels:
 
         mock_plan = Mock()
         mock_plan.levels = [mock_level0, mock_level1, mock_level2]
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow()
 
         # Should have called execute_plan with the plan
@@ -346,18 +343,16 @@ class TestRunWorkflowWithLevels:
 
     def test_run_workflow_handles_empty_plan(self):
         """Test run_workflow handles empty execution plan"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         result = manager.run_workflow()
 
         assert "results" in result
@@ -369,19 +364,16 @@ class TestRunWorkflowExecutionId:
 
     def test_run_workflow_generates_unique_execution_id(self):
         """Test that run_workflow generates unique execution IDs"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
-        mock_dag.parameter_info = {}
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
 
         # Run workflow twice and collect execution IDs
         manager.run_workflow()
@@ -397,19 +389,16 @@ class TestRunWorkflowExecutionId:
         """Test that execution_id is in UUID format"""
         import uuid
 
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
-        mock_dag.parameter_info = {}
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow()
 
         context = mock_executor.execute_plan.call_args[0][1]
@@ -429,19 +418,16 @@ class TestRunWorkflowMetadata:
 
     def test_run_workflow_includes_started_at_in_metadata(self):
         """Test that run_workflow includes started_at timestamp in metadata"""
-        mock_study = Mock()
-        mock_dag = Mock()
-        mock_study.dag = mock_dag
-        mock_dag.parameter_info = {}
+        mock_study, _ = create_mock_study_with_dag()
 
         mock_plan = Mock()
         mock_plan.levels = []
-        mock_dag.group_tasks.return_value = mock_plan
 
         mock_executor = Mock()
         mock_executor.execute_plan.return_value = {"results": {}}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
+        manager.dag.group_tasks = Mock(return_value=mock_plan)
         manager.run_workflow()
 
         context = mock_executor.execute_plan.call_args[0][1]

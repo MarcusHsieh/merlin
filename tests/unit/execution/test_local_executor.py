@@ -142,6 +142,7 @@ class TestExecuteStepWrapper:
         mock_step.get_workspace.return_value = "/workspace/task1"
         mock_step.name.return_value = "task1"
         mock_step.execute.return_value = 0  # Success
+        mock_step.max_retries = 10  # Required for retry logic
 
         adapter_config = {"type": "local"}
 
@@ -163,6 +164,7 @@ class TestExecuteStepWrapper:
         mock_step.get_workspace.return_value = "/workspace/task1"
         mock_step.name.return_value = "task1"
         mock_step.execute.return_value = 1  # Failure
+        mock_step.max_retries = 10  # Required for retry logic
 
         adapter_config = {"type": "local"}
 
@@ -179,6 +181,7 @@ class TestExecuteStepWrapper:
         mock_step.get_workspace.return_value = "/workspace/task1"
         mock_step.name.return_value = "task1"
         mock_step.execute.side_effect = RuntimeError("Execution failed")
+        mock_step.max_retries = 10  # Required for retry logic
 
         adapter_config = {"type": "local"}
 
