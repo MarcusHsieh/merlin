@@ -47,9 +47,7 @@ class TestUpdateStatusFileAutoDetection:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_auto_detect_local_mode(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_auto_detect_local_mode(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test task_server auto-detection when is_local_mode() returns True"""
         mock_is_local_mode.return_value = True
         mock_exists.return_value = False  # Status file doesn't exist
@@ -74,9 +72,7 @@ class TestUpdateStatusFileAutoDetection:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_auto_detect_celery_mode(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_auto_detect_celery_mode(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test task_server auto-detection when is_local_mode() returns False"""
         mock_is_local_mode.return_value = False
         mock_exists.return_value = False
@@ -97,9 +93,7 @@ class TestUpdateStatusFileAutoDetection:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_explicit_local_override(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_explicit_local_override(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test explicit task_server='local' overrides auto-detection"""
         # Even if is_local_mode returns False, explicit override should work
         mock_is_local_mode.return_value = False
@@ -122,9 +116,7 @@ class TestUpdateStatusFileAutoDetection:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_explicit_celery_override(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_explicit_celery_override(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test explicit task_server='celery' overrides auto-detection"""
         # Even if is_local_mode returns True, explicit override should work
         mock_is_local_mode.return_value = True
@@ -240,9 +232,7 @@ class TestUpdateStatusFileCeleryBehavior:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_local_mode_never_imports_celery(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_local_mode_never_imports_celery(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test that local mode never tries to import celery"""
         mock_is_local_mode.return_value = True
         mock_exists.return_value = False
@@ -286,9 +276,7 @@ class TestUpdateStatusFileStatusInfo:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_status_info_contains_correct_fields(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_status_info_contains_correct_fields(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test that status_info dict contains all required fields"""
         mock_is_local_mode.return_value = True
         mock_exists.return_value = False
@@ -318,9 +306,7 @@ class TestUpdateStatusFileStatusInfo:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_status_info_includes_parameters(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_status_info_includes_parameters(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test that status_info includes cmd and restart parameters"""
         mock_is_local_mode.return_value = True
         mock_exists.return_value = False
@@ -341,9 +327,7 @@ class TestUpdateStatusFileStatusInfo:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_status_translates_state_enum(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_status_translates_state_enum(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test that State enum is translated to string"""
         mock_is_local_mode.return_value = True
         mock_exists.return_value = False
@@ -362,9 +346,7 @@ class TestUpdateStatusFileStatusInfo:
     @patch("merlin.study.step.read_status")
     @patch("merlin.study.step.os.path.exists")
     @patch("merlin.config.configfile.is_local_mode")
-    def test_updates_existing_status_file(
-        self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status
-    ):
+    def test_updates_existing_status_file(self, mock_is_local_mode, mock_exists, mock_read_status, mock_write_status):
         """Test that existing status file is read and updated"""
         mock_is_local_mode.return_value = True
         mock_exists.return_value = True  # Status file exists

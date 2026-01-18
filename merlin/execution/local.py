@@ -13,10 +13,15 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Dict, List
 
+from merlin.common.enums import ReturnCode
 from merlin.dag.models import ExecutionPlan, TaskChain
 from merlin.execution.base import TaskExecutor
 from merlin.execution.models import ExecutionContext, TaskResult, TaskStatus
 from merlin.execution.sample_expander import SampleExpander
+
+# Success return codes that indicate task completed successfully
+# SOFT_FAIL is included because it allows dependent tasks to continue
+SUCCESS_CODES = {ReturnCode.OK, ReturnCode.DRY_OK, ReturnCode.SOFT_FAIL}
 
 
 def write_status(status_file: str, status: str, return_code=None, elapsed_time=None):
@@ -158,7 +163,8 @@ class LocalExecutor(TaskExecutor):
                 try:
                     return_code = future.result(timeout=3600)  # 1 hour timeout per task
 
-                    if return_code == 0:
+                    # Check for success codes (OK=0, DRY_OK=103, etc.)
+                    if return_code in SUCCESS_CODES or return_code in {rc.value for rc in SUCCESS_CODES}:
                         all_results[task_name] = TaskResult(
                             task_name=task_name, status=TaskStatus.COMPLETED, result=return_code
                         )
@@ -191,6 +197,8 @@ class LocalExecutor(TaskExecutor):
         import os
         import traceback
 
+        from merlin.common.enums import ReturnCode
+
         try:
             # Get workspace
             workspace = step.get_workspace()
@@ -203,13 +211,51 @@ class LocalExecutor(TaskExecutor):
 
                 LOG = logging.getLogger(__name__)
                 LOG.info(f"Skipping step '{step_name}' in '{workspace}' (already finished).")
-                return 0
+                return ReturnCode.OK
 
-            # Execute step (handles script generation and execution internally)
-            return_code = step.execute(adapter_config)
+            # Get max_retries from step (default to 10 if not specified)
+            try:
+                max_retries = step.max_retries
+            except (AttributeError, KeyError):
+                max_retries = 10
 
-            # Touch MERLIN_FINISHED if successful
-            if return_code == 0:
+            # Execute step with retry logic for RESTART
+            retry_count = 0
+            return_code = None
+            while retry_count <= max_retries:
+                # Execute step (handles script generation and execution internally)
+                return_code = step.execute(adapter_config)
+
+                # Check if we need to restart
+                if return_code == ReturnCode.RESTART or return_code == ReturnCode.RESTART.value:
+                    retry_count += 1
+                    import logging
+
+                    LOG = logging.getLogger(__name__)
+                    LOG.info(f"Step '{step_name}' requested restart (attempt {retry_count}/{max_retries})")
+
+                    # Check if max retries exceeded
+                    if retry_count > max_retries:
+                        LOG.info(f"Step '{step_name}' exceeded max retries ({max_retries}), returning SOFT_FAIL")
+                        return_code = ReturnCode.SOFT_FAIL
+                        break
+
+                    # Mark step for restart and continue loop
+                    step.restart = True
+                    continue
+
+                # Not a restart - break out of loop
+                break
+
+            # Touch MERLIN_FINISHED if successful (OK, DRY_OK, or SOFT_FAIL)
+            if return_code in (
+                ReturnCode.OK,
+                ReturnCode.OK.value,
+                ReturnCode.DRY_OK,
+                ReturnCode.DRY_OK.value,
+                ReturnCode.SOFT_FAIL,
+                ReturnCode.SOFT_FAIL.value,
+            ):
                 open(finished_file, "w").close()
 
             return return_code

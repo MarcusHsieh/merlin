@@ -218,9 +218,7 @@ class TestRunWorkflowReturnFormats:
         mock_executor = Mock()
         # New format from CeleryExecutor
         mock_executor.execute_plan.return_value = {
-            "results": {
-                "task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)
-            },
+            "results": {"task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)},
             "workflow_id": "workflow-123",
             "async_result": Mock(),
         }
@@ -245,9 +243,7 @@ class TestRunWorkflowReturnFormats:
 
         mock_executor = Mock()
         # Old format from LocalExecutor (just results dict)
-        mock_executor.execute_plan.return_value = {
-            "task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)
-        }
+        mock_executor.execute_plan.return_value = {"task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)}
 
         manager = WorkflowManager(study=mock_study, executor=mock_executor)
         result = manager.run_workflow()
@@ -308,9 +304,7 @@ class TestRunWorkflowResultCounting:
         result = manager.run_workflow()
 
         # Count failed tasks
-        failed_count = sum(
-            1 for r in result["results"].values() if r.status == TaskStatus.FAILED
-        )
+        failed_count = sum(1 for r in result["results"].values() if r.status == TaskStatus.FAILED)
         assert failed_count == 2
 
 

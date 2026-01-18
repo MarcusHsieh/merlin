@@ -10,6 +10,7 @@ import time
 import uuid
 from typing import Dict
 
+from merlin.dag.dag import DAG as ExecutionDAG
 from merlin.execution.base import TaskExecutor
 from merlin.execution.models import ExecutionContext, TaskStatus
 from merlin.study.study import MerlinStudy
@@ -20,7 +21,16 @@ class WorkflowManager:
 
     def __init__(self, study: MerlinStudy, executor: TaskExecutor):
         self.study = study
-        self.dag = self.study.dag
+        # Create a new DAG using the execution framework's DAG class
+        # This allows the old study.dag to remain unchanged for backwards compatibility
+        old_dag = study.dag
+        self.dag = ExecutionDAG(
+            old_dag.maestro_adjacency_table,
+            old_dag.maestro_values,
+            old_dag.column_labels,
+            old_dag.study_name,
+            old_dag.parameter_info,
+        )
         self.executor = executor
 
     def run_workflow(self, source_node: str = "_source", wait: bool = False, timeout: int = 7200) -> Dict:

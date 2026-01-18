@@ -338,9 +338,7 @@ class TestExecuteLevelParallel:
         context = Mock()
         mock_executor = Mock()
 
-        level = ExecutionLevel(
-            depth=0, parallel_chains=[TaskChain(tasks=["_source"], depth=0)]
-        )
+        level = ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["_source"], depth=0)])
 
         result = executor._execute_level_parallel(level, context, mock_executor)
 
@@ -352,9 +350,7 @@ class TestExecuteLevelParallel:
 
     @patch.object(LocalExecutor, "_has_real_tasks")
     @patch.object(LocalExecutor, "_execute_chain_with_dependencies")
-    def test_execute_level_parallel_executes_real_chains(
-        self, mock_execute_chain, mock_has_real_tasks
-    ):
+    def test_execute_level_parallel_executes_real_chains(self, mock_execute_chain, mock_has_real_tasks):
         """Test _execute_level_parallel executes real task chains"""
         executor = LocalExecutor()
 
@@ -362,16 +358,12 @@ class TestExecuteLevelParallel:
 
         # Mock sample expander
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": Mock(), "sample_id": None}]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": Mock(), "sample_id": None}]]
 
         # Mock chain execution
         mock_step = Mock()
         mock_step.name.return_value = "task1"
-        mock_execute_chain.return_value = {
-            "task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)
-        }
+        mock_execute_chain.return_value = {"task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)}
 
         context = Mock()
         mock_executor = Mock()
@@ -451,11 +443,7 @@ class TestExecutePlan:
         # Mock execution with failure in second level
         mock_execute_level.side_effect = [
             {"step1": TaskResult(task_name="step1", status=TaskStatus.COMPLETED)},
-            {
-                "step2": TaskResult(
-                    task_name="step2", status=TaskStatus.FAILED, error="Task failed"
-                )
-            },
+            {"step2": TaskResult(task_name="step2", status=TaskStatus.FAILED, error="Task failed")},
             {"step3": TaskResult(task_name="step3", status=TaskStatus.COMPLETED)},
         ]
 
@@ -489,13 +477,9 @@ class TestExecutePlan:
         """Test execute_plan uses correct max_workers"""
         executor = LocalExecutor(max_workers=8)
 
-        mock_execute_level.return_value = {
-            "task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)
-        }
+        mock_execute_level.return_value = {"task1": TaskResult(task_name="task1", status=TaskStatus.COMPLETED)}
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])])
 
         context = Mock()
 

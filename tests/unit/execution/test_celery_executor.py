@@ -314,9 +314,7 @@ class TestExecutePlanVirtualNodes:
         context.study.dag.step.return_value = None
         context.study.workspace = "/workspace"
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["_source"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["_source"], depth=0)])])
 
         result = executor.execute_plan(plan, context, wait=False)
 
@@ -349,9 +347,7 @@ class TestExecutePlanVirtualNodes:
 
         # Mock sample_expander
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": mock_step, "sample_id": None}]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": mock_step, "sample_id": None}]]
 
         # Mock async result
         mock_async = Mock()
@@ -398,9 +394,7 @@ class TestExecutePlanWorkflow:
 
         # Mock sample_expander
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": mock_step, "sample_id": None}]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": mock_step, "sample_id": None}]]
 
         # Mock async result
         mock_async = Mock()
@@ -415,9 +409,7 @@ class TestExecutePlanWorkflow:
         context.study.sample_labels = []
         context.study.samples = []
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             context.study.workspace = tmpdir
@@ -450,9 +442,7 @@ class TestExecutePlanWorkflow:
         mock_step.name.return_value = "task1"
 
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": mock_step, "sample_id": None}]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": mock_step, "sample_id": None}]]
 
         mock_async = Mock()
         mock_async.id = "workflow-456"
@@ -466,9 +456,7 @@ class TestExecutePlanWorkflow:
         context.study.sample_labels = []
         context.study.samples = []
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             context.study.workspace = tmpdir
@@ -492,9 +480,7 @@ class TestExecutePlanWorkflow:
         context.study.dag.step.return_value = None  # All virtual nodes
         context.study.workspace = "/workspace"
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["_source"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["_source"], depth=0)])])
 
         result = executor.execute_plan(plan, context, wait=False)
 
@@ -516,9 +502,7 @@ class TestExecutePlanWaitBehavior:
         mock_step.name.return_value = "task1"
 
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": mock_step, "sample_id": None}]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": mock_step, "sample_id": None}]]
 
         mock_async = Mock()
         mock_async.id = "workflow-789"
@@ -532,9 +516,7 @@ class TestExecutePlanWaitBehavior:
         context.study.sample_labels = []
         context.study.samples = []
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             context.study.workspace = tmpdir
@@ -559,9 +541,7 @@ class TestExecutePlanWaitBehavior:
         mock_step.name.return_value = "task1"
 
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": mock_step, "sample_id": None}]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": mock_step, "sample_id": None}]]
 
         mock_async = Mock()
         mock_async.id = "workflow-wait"
@@ -576,9 +556,7 @@ class TestExecutePlanWaitBehavior:
         context.study.sample_labels = []
         context.study.samples = []
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             context.study.workspace = tmpdir
@@ -603,9 +581,7 @@ class TestExecutePlanWaitBehavior:
         mock_step.name.return_value = "task1"
 
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": mock_step, "sample_id": None}]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": mock_step, "sample_id": None}]]
 
         mock_async = Mock()
         mock_async.id = "workflow-complete"
@@ -620,9 +596,7 @@ class TestExecutePlanWaitBehavior:
         context.study.sample_labels = []
         context.study.samples = []
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             context.study.workspace = tmpdir
@@ -652,9 +626,7 @@ class TestExecutePlanWaitBehavior:
         mock_step.name.return_value = "task1"
 
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": mock_step, "sample_id": None}]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": mock_step, "sample_id": None}]]
 
         mock_async = Mock()
         mock_async.id = "workflow-fail"
@@ -669,9 +641,7 @@ class TestExecutePlanWaitBehavior:
         context.study.sample_labels = []
         context.study.samples = []
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             context.study.workspace = tmpdir
@@ -715,9 +685,7 @@ class TestExecutePlanBatching:
             s.name.return_value = f"task_sample{i}"
 
         executor.sample_expander = Mock()
-        executor.sample_expander.expand_chain.return_value = [
-            [{"step": s, "sample_id": i} for i, s in enumerate(mock_steps)]
-        ]
+        executor.sample_expander.expand_chain.return_value = [[{"step": s, "sample_id": i} for i, s in enumerate(mock_steps)]]
 
         mock_group_result = Mock()
         mock_celery_imports["group"].return_value = mock_group_result
@@ -732,9 +700,7 @@ class TestExecutePlanBatching:
         context.study.sample_labels = []
         context.study.samples = []
 
-        plan = ExecutionPlan(
-            [ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])]
-        )
+        plan = ExecutionPlan([ExecutionLevel(depth=0, parallel_chains=[TaskChain(tasks=["task1"], depth=0)])])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             context.study.workspace = tmpdir
