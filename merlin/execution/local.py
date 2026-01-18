@@ -19,6 +19,7 @@ from merlin.execution.base import TaskExecutor
 from merlin.execution.models import ExecutionContext, TaskResult, TaskStatus
 from merlin.execution.sample_expander import SampleExpander
 
+
 # Success return codes that indicate task completed successfully
 # SOFT_FAIL is included because it allows dependent tasks to continue
 SUCCESS_CODES = {ReturnCode.OK, ReturnCode.DRY_OK, ReturnCode.SOFT_FAIL}
