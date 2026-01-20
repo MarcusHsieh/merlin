@@ -115,10 +115,7 @@ class LocalExecutor(TaskExecutor):
             # Log expansion details
             total_expanded = sum(len(pos) for pos in expanded_positions)
             chain_name = chain.tasks[0] if chain.tasks else "unknown"
-            print(
-                f"  Chain '{chain_name}' expanded to {total_expanded} tasks "
-                f"across {len(expanded_positions)} positions"
-            )
+            print(f"  Chain '{chain_name}' expanded to {total_expanded} tasks " f"across {len(expanded_positions)} positions")
 
             # Execute chain with dependencies (sequential positions, parallel samples)
             position_results = self._execute_chain_with_dependencies(expanded_positions, context, executor)

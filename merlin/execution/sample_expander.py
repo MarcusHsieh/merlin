@@ -124,10 +124,7 @@ class SampleExpander:
                     break
 
         num_samples = len(samples) if samples is not None else 0
-        LOG.info(
-            f"Sample expansion check: needs_expansion={needs_expansion}, "
-            f"num_samples={num_samples}, labels={labels}"
-        )
+        LOG.info(f"Sample expansion check: needs_expansion={needs_expansion}, " f"num_samples={num_samples}, labels={labels}")
 
         if not needs_expansion:
             # No expansion needed - return steps with glob substitutions applied
