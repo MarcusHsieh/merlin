@@ -91,7 +91,8 @@ class SampleExpander:
             # Note: No trailing slash since the command adds one
             glob_path = "/".join(["*"] * (len(directory_sizes) + 1))
             LOG.info(
-                f"Calculated glob_path: '{glob_path}' from directory_sizes={directory_sizes} (+1 for execution dir) for {len(samples)} samples"
+                f"Calculated glob_path: '{glob_path}' from directory_sizes={directory_sizes} "
+                f"(+1 for execution dir) for {len(samples)} samples"
             )
 
             # Create sample index to get all sample paths
@@ -122,8 +123,10 @@ class SampleExpander:
                     needs_expansion = True
                     break
 
+        num_samples = len(samples) if samples is not None else 0
         LOG.info(
-            f"Sample expansion check: needs_expansion={needs_expansion}, num_samples={len(samples) if samples is not None else 0}, labels={labels}"
+            f"Sample expansion check: needs_expansion={needs_expansion}, "
+            f"num_samples={num_samples}, labels={labels}"
         )
 
         if not needs_expansion:
@@ -193,7 +196,8 @@ class SampleExpander:
         # Log expansion results
         total_tasks = sum(len(pos_tasks) for pos_tasks in result)
         LOG.info(
-            f"Sample expansion complete: created {total_tasks} tasks across {len(result)} positions for chain with {len(chain.tasks)} original tasks"
+            f"Sample expansion complete: created {total_tasks} tasks across {len(result)} positions "
+            f"for chain with {len(chain.tasks)} original tasks"
         )
 
         return result
