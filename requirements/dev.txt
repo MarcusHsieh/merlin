@@ -1,6 +1,6 @@
 # Development dependencies.
 build
-black
+black==25.12.0
 dep-license
 flake8
 isort
