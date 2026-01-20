@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New execution framework module with `LocalExecutor` and `CeleryExecutor`
+- `SampleExpander` for sample workspace isolation
+- `WorkflowManager` for workflow orchestration
+- DAG models (`ExecutionPlan`, `ExecutionLevel`, `TaskChain`)
+
 ### Changed
 - Removed old monitor code from v1.0
 - Moved `stop-workers` functionality to the `CeleryWorkerHandlers` class
